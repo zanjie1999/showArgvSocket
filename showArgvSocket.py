@@ -110,11 +110,15 @@ print()
 print(argv)
 print()
 
-print("File name: ", argv[0])
+print('File name:', argv[0])
 
 cmd = argv[0]
 cHost = -1
 cPort = -1
+isUrl = ''
+url = ''
+local = ''
+userAndPwd = []
 for i in range(1, len(argv)):
     print(i, " -> ", argv[i])
     cmd += " " + argv[i]
@@ -122,17 +126,45 @@ for i in range(1, len(argv)):
         cHost = i + 1
     if argv[i] == '-p':
         cPort = i + 1
-        
+    if argv[i].startswith('sftp://'):
+        # Fz sftp
+        isUrl = 'sftp'
+        url=argv[i].split(' ')[0]
+        userAndPwd = url.split('@')[0].replace('sftp://', '', 1).split(':', 1)
+        cHost = url.split('@')[1]
+    if argv[i].startswith('ssh://'):
+        # Xshell url
+        isUrl = 'ssh'
+        url=argv[i]
+        userAndPwd = url.split('@')[0].replace('ssh://', '', 1).split(':', 1)
+        cHost = url.split('@')[1]
+
 print()
 print(cmd)
 print()
+if isUrl:
+    print()
+    print('Url:', url)
+    if isUrl == 'sftp' and '/' in cHost:
+        print('Local:', '' + cHost.split('/')[1])
+        cHost = cHost.split('/')[0]
+    if ':' in cHost:
+        cPort = cHost.split(':')[1]
+        cHost = cHost.split(':')[0]
+    else:
+        cPort = '22'
+    print('Username:',userAndPwd[0])
+    if len(userAndPwd) > 1:
+        print('Password:',userAndPwd[1])
 
 # 如果找到了目标端口，开启转发
 if cPort != -1:
-    cPort = argv[cPort]
+    if not isUrl:
+        cPort = argv[cPort]
     lT = threading.Thread(target=_server, args=(lPort, 0))
     if cHost != -1:
-        cHost = argv[cHost]
+        if not isUrl:
+            cHost = argv[cHost]
         # 避免hosts问题，ip写死
         if cHost == 'localhost':
             cHost = '127.0.0.1'
