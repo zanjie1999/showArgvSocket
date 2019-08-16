@@ -1,6 +1,7 @@
 # -*- encoding:utf-8 -*-
 
 # 展示传入的参数 并启动转发
+# 版本: 3.0
 
 import socket
 import sys
@@ -11,11 +12,13 @@ from sys import argv
 # 转发目标端口
 lPort = 22345
 
-streams = [None, None]  # 存放需要进行数据转发的两个数据流（都是 SocketObj 对象）
+# 存放需要进行数据转发的两个数据流（都是 SocketObj 对象）
+streams = [None, None]
 debug = 0
 
-# 从streams获取另外一个流对象，如果当前为空，则等待
+
 def _get_another_stream(num):
+    # 从streams获取另外一个流对象，如果当前为空，则等待
     if num == 0:
         num = 1
     elif num == 1:
@@ -33,15 +36,17 @@ def _get_another_stream(num):
         else:
             time.sleep(1)
 
-# 交换两个流的数据 num为当前流编号,主要用于调试目的，区分两个回路状态用
+
 def _xstream(num, s1, s2):
+    # 交换两个流的数据 num为当前流编号,主要用于调试目的，区分两个回路状态用
     try:
         while True:
             # 注意，recv 函数会阻塞，直到对端完全关闭（close 后还需要一定时间才能关闭，最快关闭方法是 shutdow）
             buff = s1.recv(1024)
             if debug > 0:
                 print('%d recv' % num)
-            if len(buff) == 0:  # 对端关闭连接，读不到数据
+            if len(buff) == 0:
+                # 对端关闭连接，读不到数据
                 print('%d one closed' % num)
                 break
             s2.sendall(buff)
@@ -66,8 +71,9 @@ def _xstream(num, s1, s2):
     streams[1] = None
     print('%d CLOSED' % num)
 
-# 处理服务情况，num 为流编号（第 0 号还是第 1 号）
+
 def _server(port, num):
+    # 处理服务情况，num 为流编号（第 0 号还是第 1 号）
     srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     srv.bind(('0.0.0.0', port))
@@ -75,12 +81,15 @@ def _server(port, num):
     while True:
         conn, addr = srv.accept()
         print('connected from: %s' % str(addr))
-        streams[num] = conn  # 放入本端流对象
-        s2 = _get_another_stream(num)  # 获取另一端流对象
+        # 放入本端流对象
+        streams[num] = conn
+        # 获取另一端流对象
+        s2 = _get_another_stream(num)
         _xstream(num, conn, s2)
 
-# 处理连接，num 为流编号（第 0 号还是第 1 号）如果连接不到远程，会 sleep 36s，最多尝试 200（即两小时）
+
 def _connect(host, port, num):
+    # 处理连接，num 为流编号（第 0 号还是第 1 号）如果连接不到远程，会 sleep 36s，最多尝试 200（即两小时）
     not_connet_time = 0
     wait_time = 36
     try_cnt = 199
@@ -100,9 +109,31 @@ def _connect(host, port, num):
             continue
 
         print('connected to %s:%i' % (host, port))
-        streams[num] = conn  # 放入本端流对象
-        s2 = _get_another_stream(num)  # 获取另一端流对象
+        # 放入本端流对象
+        streams[num] = conn
+        # 获取另一端流对象
+        s2 = _get_another_stream(num)
         _xstream(num, conn, s2)
+
+
+def test_port_in_use(port):
+    # 测试端口是否占用
+    s = socket.socket()
+    s.settimeout(0.5)
+    try:
+        return s.connect_ex(('127.0.0.1', port)) == 0
+    finally:
+        s.close()
+
+
+def _find_port_can_use():
+    # 找一个能用的端口
+    global lPort
+    while test_port_in_use(lPort):
+        print('Port', lPort, 'is in use...')
+        if lPort == 65535:
+            lPort = 0
+        lPort += 1
 
 
 # main
@@ -129,13 +160,13 @@ for i in range(1, len(argv)):
     if argv[i].startswith('sftp://'):
         # Fz sftp
         isUrl = 'sftp'
-        url=argv[i].split(' ')[0]
+        url = argv[i].split(' ')[0]
         userAndPwd = url.split('@')[0].replace('sftp://', '', 1).split(':', 1)
         cHost = url.split('@')[1]
     if argv[i].startswith('ssh://'):
         # Xshell url
         isUrl = 'ssh'
-        url=argv[i]
+        url = argv[i]
         userAndPwd = url.split('@')[0].replace('ssh://', '', 1).split(':', 1)
         cHost = url.split('@')[1]
 
@@ -153,12 +184,13 @@ if isUrl:
         cHost = cHost.split(':')[0]
     else:
         cPort = '22'
-    print('Username:',userAndPwd[0])
+    print('Username:', userAndPwd[0])
     if len(userAndPwd) > 1:
-        print('Password:',userAndPwd[1])
+        print('Password:', userAndPwd[1])
 
 # 如果找到了目标端口，开启转发
 if cPort != -1:
+    _find_port_can_use()
     if not isUrl:
         cPort = argv[cPort]
     lT = threading.Thread(target=_server, args=(lPort, 0))
